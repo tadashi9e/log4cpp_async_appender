@@ -15,6 +15,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <log4cpp/AsyncAppender.hh>
 #include <log4cpp/DailyRollingFileAppender.hh>
 #include <log4cpp/Category.hh>
 #include <log4cpp/FactoryParams.hh>
@@ -180,4 +181,14 @@ namespace log4cpp {
 
       return std::auto_ptr<Appender>(new DailyRollingFileAppender(name, filename, max_days_keep, append, mode));
    }
+
+  std::auto_ptr<Appender>
+  create_async_daily_roll_file_appender(const FactoryParams& params) {
+    std::string name;
+    params.get_for("async file appender").required("name", name);
+    return
+      std::auto_ptr<Appender>(
+        new AsyncAppender<std::auto_ptr<Appender> >(
+          name, create_daily_roll_file_appender(params)));
+  }
 }

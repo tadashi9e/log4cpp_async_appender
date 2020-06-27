@@ -22,6 +22,7 @@
 
 // appenders
 #include <log4cpp/Appender.hh>
+#include <log4cpp/AsyncAppender.hh>
 #include <log4cpp/OstreamAppender.hh>
 #include <log4cpp/FileAppender.hh>
 #include <log4cpp/RollingFileAppender.hh>
@@ -220,10 +221,28 @@ namespace log4cpp {
                 throw ConfigureFailure(appenderName + "' has invalid target '" + target + "'");
             }
         }
+        else if (appenderType == "AsyncFileAppender") {
+            std::string fileName = _properties.getString(appenderPrefix + ".fileName", "foobar");
+            bool append = _properties.getBool(appenderPrefix + ".append", true);
+            appender = new AsyncAppender<Appender*>(
+              appenderName,
+              new FileAppender(appenderName, fileName, append));
+        }
         else if (appenderType == "FileAppender") {
             std::string fileName = _properties.getString(appenderPrefix + ".fileName", "foobar");
             bool append = _properties.getBool(appenderPrefix + ".append", true);
             appender = new FileAppender(appenderName, fileName, append);
+        }
+        else if (appenderType == "AsyncRollingFileAppender") {
+            std::string fileName = _properties.getString(appenderPrefix + ".fileName", "foobar");
+            size_t maxFileSize = _properties.getInt(appenderPrefix + ".maxFileSize", 10*1024*1024);
+            int maxBackupIndex = _properties.getInt(appenderPrefix + ".maxBackupIndex", 1);
+            bool append = _properties.getBool(appenderPrefix + ".append", true);
+            appender = new AsyncAppender<Appender*>(
+              appenderName,
+              new RollingFileAppender(
+                appenderName, fileName, maxFileSize, maxBackupIndex,
+                append));
         }
         else if (appenderType == "RollingFileAppender") {
             std::string fileName = _properties.getString(appenderPrefix + ".fileName", "foobar");
@@ -232,6 +251,15 @@ namespace log4cpp {
             bool append = _properties.getBool(appenderPrefix + ".append", true);
             appender = new RollingFileAppender(appenderName, fileName, maxFileSize, maxBackupIndex,
                 append);
+        }
+        else if (appenderType == "AsyncDailyRollingFileAppender") {
+            std::string fileName = _properties.getString(appenderPrefix + ".fileName", "foobar");
+            unsigned int maxDaysKeep = _properties.getInt(appenderPrefix + ".maxDaysKeep", 0);
+            bool append = _properties.getBool(appenderPrefix + ".append", true);
+            appender = new AsyncAppender<Appender*>(
+              appenderName,
+              new DailyRollingFileAppender(
+                appenderName, fileName, maxDaysKeep, append));
         }
         else if (appenderType == "DailyRollingFileAppender") {
             std::string fileName = _properties.getString(appenderPrefix + ".fileName", "foobar");

@@ -22,6 +22,7 @@
 
 #include <log4cpp/Category.hh>
 #include <log4cpp/Appender.hh>
+#include <log4cpp/AsyncAppender.hh>
 #include <log4cpp/OstreamAppender.hh>
 #include <log4cpp/FileAppender.hh>
 #include <log4cpp/RollingFileAppender.hh>
@@ -81,12 +82,41 @@ namespace log4cpp {
                 
                 if (initFile >> layout >> appenderName) {
                     log4cpp::Appender* appender;
-                    if (appenderName.compare("file") == 0) {
+                    if (appenderName.compare("asyncfile") == 0) {
+                        std::string logFileName;
+                        if (!(initFile >> logFileName)) {
+                            throw ConfigureFailure("Missing filename for log file logging configuration file for category: " + categoryName);
+                        }
+                        appender = new log4cpp::AsyncAppender<log4cpp::Appender*>(
+                          categoryName,
+                          new log4cpp::FileAppender(
+                            categoryName, logFileName));
+                    }
+                    else if (appenderName.compare("file") == 0) {
                         std::string logFileName;
                         if (!(initFile >> logFileName)) {
                             throw ConfigureFailure("Missing filename for log file logging configuration file for category: " + categoryName);
                         }
                         appender = new log4cpp::FileAppender(categoryName, logFileName);
+                    }
+                    else if (appenderName.compare("asyncrolling") == 0) {
+                        std::string logFileName;
+                        size_t maxFileSize;
+                        unsigned int maxBackupIndex=1;
+                        if (!(initFile >> logFileName)) {
+                            throw ConfigureFailure("Missing filename for log file logging configuration file for category: " + categoryName);
+                        }
+                        if (!(initFile >> maxFileSize)) {
+                            throw ConfigureFailure("Missing maximum size for log file logging configuration file for category: " + categoryName);
+                        }
+                        if (!(initFile >> maxBackupIndex)) {
+                            throw ConfigureFailure("Missing maximum backup index for log file logging configuration file for category: " + categoryName);
+                        }
+                        appender = new log4cpp::AsyncAppender<log4cpp::Appender*>(
+                          categoryName,
+                          new log4cpp::RollingFileAppender(
+                            categoryName, logFileName,
+                            maxFileSize, maxBackupIndex));
                     }
                     else if (appenderName.compare("rolling") == 0) {
                         std::string logFileName;
@@ -102,6 +132,20 @@ namespace log4cpp {
                             throw ConfigureFailure("Missing maximum backup index for log file logging configuration file for category: " + categoryName);
                         }
                         appender = new log4cpp::RollingFileAppender(categoryName, logFileName, maxFileSize, maxBackupIndex);
+                    }
+                    else if (appenderName.compare("asyncdailyrolling") == 0) {
+                        std::string logFileName;
+                        unsigned int maxKeepDays=1;
+                        if (!(initFile >> logFileName)) {
+                            throw ConfigureFailure("Missing filename for log file logging configuration file for category: " + categoryName);
+                        }
+                        if (!(initFile >> maxKeepDays)) {
+                            throw ConfigureFailure("Missing maximum keep days for log file logging configuration file for category: " + categoryName);
+                        }
+                        appender = new log4cpp::AsyncAppender<log4cpp::Appender*>(
+                          categoryName,
+                          new log4cpp::DailyRollingFileAppender(
+                            categoryName, logFileName, maxKeepDays));
                     }
                     else if (appenderName.compare("dailyrolling") == 0) {
                         std::string logFileName;

@@ -12,8 +12,11 @@ namespace log4cpp
 {
    static AppendersFactory* appenders_factory_ = 0;
 
+   std::auto_ptr<Appender> create_async_file_appender(const FactoryParams&);
    std::auto_ptr<Appender> create_file_appender(const FactoryParams&);
+   std::auto_ptr<Appender> create_async_roll_file_appender(const FactoryParams&);
    std::auto_ptr<Appender> create_roll_file_appender(const FactoryParams&);
+   std::auto_ptr<Appender> create_async_daily_roll_file_appender(const FactoryParams&);
    std::auto_ptr<Appender> create_daily_roll_file_appender(const FactoryParams&);
    std::auto_ptr<Appender> create_idsa_appender(const FactoryParams&);
    std::auto_ptr<Appender> create_nt_event_log_appender(const FactoryParams&);
@@ -29,8 +32,11 @@ namespace log4cpp
       {
          std::auto_ptr<AppendersFactory> af(new AppendersFactory);
          
+         af->registerCreator("async file", &create_async_file_appender);
          af->registerCreator("file", &create_file_appender);
+         af->registerCreator("async roll file", &create_async_roll_file_appender);
          af->registerCreator("roll file", &create_roll_file_appender);
+         af->registerCreator("async daily roll file", &create_async_daily_roll_file_appender);
          af->registerCreator("daily roll file", &create_daily_roll_file_appender);
 #if !defined(LOG4CPP_DISABLE_REMOTE_SYSLOG)
          af->registerCreator("remote syslog", &create_remote_syslog_appender);

@@ -18,6 +18,7 @@
 #include <memory>
 #include <stdio.h>
 #include <time.h>
+#include <log4cpp/AsyncAppender.hh>
 #include <log4cpp/FileAppender.hh>
 #include <log4cpp/Category.hh>
 #include <log4cpp/FactoryParams.hh>
@@ -110,4 +111,14 @@ namespace log4cpp {
 
       return std::auto_ptr<Appender>(new FileAppender(name, filename, append, mode));
    }
+
+  std::auto_ptr<Appender>
+  create_async_file_appender(const FactoryParams& params) {
+    std::string name;
+    params.get_for("async file appender").required("name", name);
+    return
+      std::auto_ptr<Appender>(
+        new AsyncAppender<std::auto_ptr<Appender> >(
+          name, create_file_appender(params)));
+  }
 }

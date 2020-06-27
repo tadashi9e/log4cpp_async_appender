@@ -15,6 +15,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <log4cpp/AsyncAppender.hh>
 #include <log4cpp/RollingFileAppender.hh>
 #include <log4cpp/Category.hh>
 #include <log4cpp/FactoryParams.hh>
@@ -104,5 +105,14 @@ namespace log4cpp {
                                           .optional("append", append)("mode", mode);
 
       return std::auto_ptr<Appender>(new RollingFileAppender(name, filename, max_file_size, max_backup_index, append, mode));
+   }
+   std::auto_ptr<Appender>
+   create_async_roll_file_appender(const FactoryParams& params) {
+     std::string name;
+     params.get_for("async roll file appender").required("name", name);
+    return
+      std::auto_ptr<Appender>(
+        new AsyncAppender<std::auto_ptr<Appender> >(
+          name, create_roll_file_appender(params)));
    }
 }
