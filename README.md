@@ -1,5 +1,20 @@
 # AsyncAppender for log4cpp
 
+## Dependency
+
+Requires boost thread library.
+
+## Compile
+
+~~~
+./autogen.sh
+./configure
+make
+~~~
+
+See log4cpp project website [http://log4cpp.sourceforge.net/](http://log4cpp.sourceforge.net/) for detail.
+
+## Examples
 
 Simple example
 --------------
