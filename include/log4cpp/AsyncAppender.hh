@@ -23,6 +23,7 @@ class LOG4CPP_EXPORT AsyncAppender : public Appender {
   }
   virtual ~AsyncAppender() {
     _stop_worker();
+    _delete(_appender);
   }
   /**
    * Log in wrapped appender asynchronously.
@@ -74,6 +75,11 @@ class LOG4CPP_EXPORT AsyncAppender : public Appender {
   }
 
  private:
+  template<typename T> void _delete(T& appender) {
+  }
+  template<typename T> void _delete(T* appender) {
+    delete appender;
+  }
   APPENDER _appender;
   boost::mutex _mutex;
   boost::condition_variable _cv;
@@ -89,22 +95,23 @@ class LOG4CPP_EXPORT AsyncAppender : public Appender {
   void _work() {
     boost::mutex::scoped_lock lock(_mutex);
     for (;;) {
-      if (_queue.empty()) {
-        _cv_empty.notify_one();
+      while (_queue.empty()) {
         if (_stop) {
-          break;
+          return;
         }
         _cv.wait(lock);
-        continue;
       }
-      LoggingEvent event = _queue.front();
-      _queue.pop();
-      lock.unlock();
-      try {
-        _appender->doAppend(event);
-      } catch(...) {
+      while (!_queue.empty()) {
+        LoggingEvent event = _queue.front();
+        _queue.pop();
+        lock.unlock();
+        try {
+          _appender->doAppend(event);
+        } catch(...) {
+        }
+        lock.lock();
       }
-      lock.lock();
+      _cv_empty.notify_one();
     }
   }
   /**
