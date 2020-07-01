@@ -2,7 +2,7 @@
 
 ## Dependency
 
-Requires boost thread library.
+Requires pthread library.
 
 ## Compile
 

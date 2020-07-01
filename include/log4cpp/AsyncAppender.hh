@@ -3,9 +3,9 @@
 
 #include <log4cpp/Appender.hh>
 
+#include <pthread.h>
 #include <memory>
 #include <queue>
-#include <boost/thread.hpp>
 
 namespace log4cpp {
 
@@ -18,8 +18,24 @@ class LOG4CPP_EXPORT AsyncAppender : public Appender {
      @param appender wrapped appender.
    **/
   AsyncAppender(const std::string& name, APPENDER appender)
-    : Appender(name), _appender(appender), _closed(false), _stop(false),
-    _thread(boost::bind(&AsyncAppender::_work, this)) {
+    : Appender(name), _appender(appender), _closed(false), _stop(false) {
+    int err;
+    err = pthread_mutex_init(&_mutex, NULL);
+    if (err) {
+      _report_error("pthread_mutex_init", errno);
+    }
+    err = pthread_cond_init(&_cv, NULL);
+    if (err) {
+      _report_error("pthread_cond_init", errno);
+    }
+    err = pthread_cond_init(&_cv_empty, NULL);
+    if (err) {
+      _report_error("pthread_cond_init", errno);
+    }
+    err = pthread_create(&_thread, NULL, &_call_work, this);
+    if (err) {
+      _report_error("pthread_cond_init", errno);
+    }
   }
   virtual ~AsyncAppender() {
     _stop_worker();
@@ -29,31 +45,44 @@ class LOG4CPP_EXPORT AsyncAppender : public Appender {
    * Log in wrapped appender asynchronously.
    **/
   virtual void doAppend(const LoggingEvent& event) {
-    boost::mutex::scoped_lock lock(_mutex);
-    if (_closed) {
-      return;
+    pthread_mutex_lock(&_mutex);
+    try {
+      if (!_closed) {
+        _queue.push(event);
+        pthread_cond_signal(&_cv);
+      }
+    } catch (...) {
     }
-    _queue.push(event);
-    _cv.notify_one();
+    pthread_mutex_unlock(&_mutex);
   }
   // ----------------------------------------------------------------------
   // Wrapper methods
   // ----------------------------------------------------------------------
   virtual bool reopen() {
-    boost::mutex::scoped_lock lock(_mutex);
-    _closed = false;
-    return _appender->reopen();
+    bool b = false;
+    pthread_mutex_lock(&_mutex);
+    try {
+      _closed = false;
+      b = _appender->reopen();
+    } catch (...) {
+    }
+    pthread_mutex_unlock(&_mutex);
+    return b;
   }
   virtual void close() {
-    boost::mutex::scoped_lock lock(_mutex);
-    // -- stop doAppend
-    _closed = true;
-    // -- wait for flush
-    while (!_queue.empty()) {
-      _cv_empty.wait(lock);
+    pthread_mutex_lock(&_mutex);
+    try {
+      // -- stop doAppend
+      _closed = true;
+      // -- wait for flush
+      while (!_queue.empty()) {
+        pthread_cond_signal(&_cv);
+      }
+      // -- close wrapped appender
+      _appender->close();
+    } catch (...) {
     }
-    // -- close wrapped appender
-    _appender->close();
+    pthread_mutex_unlock(&_mutex);
   }
   virtual bool requiresLayout() const {
     return _appender->requiresLayout();
@@ -81,49 +110,73 @@ class LOG4CPP_EXPORT AsyncAppender : public Appender {
     delete appender;
   }
   APPENDER _appender;
-  boost::mutex _mutex;
-  boost::condition_variable _cv;
-  boost::condition_variable _cv_empty;
+  pthread_mutex_t _mutex;
+  pthread_cond_t _cv;
+  pthread_cond_t _cv_empty;
   std::queue<LoggingEvent> _queue;
   bool _closed;
   bool _stop;
-  boost::thread _thread;
+  pthread_t _thread;
 
+  /**
+     Report errno as std::runtime_error.
+   **/
+  void _report_error(const char*msg, int err_no) {
+    throw std::runtime_error(std::string(msg) +
+                             (err_no == EBUSY ? "EBUSY" :
+                              err_no == EINVAL ? "EINVAL" :
+                              err_no == EAGAIN ? "EAGAIN" :
+                              err_no == ENOMEM ? "ENOMEM" :
+                              err_no == EPERM ? "EPERM" :
+                              "UNKNOWN"));
+  }
+  /**
+     Helper function.
+   **/
+  static void* _call_work(void* ctx) {
+    reinterpret_cast<AsyncAppender*>(ctx)->_work();
+    return NULL;
+  }
   /**
      Worker thread main loop.
    **/
   void _work() {
-    boost::mutex::scoped_lock lock(_mutex);
-    for (;;) {
-      while (_queue.empty()) {
-        if (_stop) {
-          return;
+    pthread_mutex_lock(&_mutex);
+    try {
+      for (;;) {
+        while (_queue.empty()) {
+          if (_stop) {
+            return;
+          }
+          pthread_cond_wait(&_cv, &_mutex);
         }
-        _cv.wait(lock);
-      }
-      while (!_queue.empty()) {
-        LoggingEvent event = _queue.front();
-        _queue.pop();
-        lock.unlock();
-        try {
-          _appender->doAppend(event);
-        } catch(...) {
+        while (!_queue.empty()) {
+          LoggingEvent event = _queue.front();
+          _queue.pop();
+          pthread_mutex_unlock(&_mutex);
+          try {
+            _appender->doAppend(event);
+          } catch (...) {
+          }
+          pthread_mutex_lock(&_mutex);
         }
-        lock.lock();
+        pthread_cond_signal(&_cv_empty);
       }
-      _cv_empty.notify_one();
+    } catch (...) {
     }
+    pthread_mutex_unlock(&_mutex);
   }
   /**
      Stop worker thread.
    **/
   void _stop_worker() {
     {
-      boost::mutex::scoped_lock lock(_mutex);
+      pthread_mutex_lock(&_mutex);
       _stop = true;
-      _cv.notify_one();
+      pthread_cond_signal(&_cv);
+      pthread_mutex_unlock(&_mutex);
     }
-    _thread.join();
+    pthread_join(_thread, NULL);
   }
 };
 
