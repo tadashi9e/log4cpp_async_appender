@@ -3,6 +3,7 @@
 
 #include <log4cpp/Appender.hh>
 
+#include <errno.h>
 #include <pthread.h>
 #include <memory>
 #include <queue>
@@ -77,6 +78,7 @@ class LOG4CPP_EXPORT AsyncAppender : public Appender {
       // -- wait for flush
       while (!_queue.empty()) {
         pthread_cond_signal(&_cv);
+        pthread_cond_wait(&_cv_empty, &_mutex);
       }
       // -- close wrapped appender
       _appender->close();
@@ -101,6 +103,13 @@ class LOG4CPP_EXPORT AsyncAppender : public Appender {
   }
   virtual Filter* getFilter() {
     return _appender->getFilter();
+  }
+
+  size_t size() {
+    pthread_mutex_lock(&_mutex);
+    size_t sz = _queue.size();
+    pthread_mutex_unlock(&_mutex);
+    return sz;
   }
 
  private:
@@ -144,11 +153,11 @@ class LOG4CPP_EXPORT AsyncAppender : public Appender {
     pthread_mutex_lock(&_mutex);
     try {
       for (;;) {
-        while (_queue.empty()) {
-          if (_stop) {
-            return;
-          }
+        while (_queue.empty() && !_stop) {
           pthread_cond_wait(&_cv, &_mutex);
+        }
+        if (_stop) {
+          break;
         }
         while (!_queue.empty()) {
           LoggingEvent event = _queue.front();
@@ -164,6 +173,7 @@ class LOG4CPP_EXPORT AsyncAppender : public Appender {
       }
     } catch (...) {
     }
+    pthread_cond_signal(&_cv_empty);
     pthread_mutex_unlock(&_mutex);
   }
   /**
