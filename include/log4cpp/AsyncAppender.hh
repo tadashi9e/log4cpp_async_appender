@@ -43,7 +43,7 @@ class LOG4CPP_EXPORT AsyncAppender : public Appender {
     _delete(_appender);
   }
   /**
-   * Log in wrapped appender asynchronously.
+     call wrapped appender asynchronously.
    **/
   virtual void doAppend(const LoggingEvent& event) {
     pthread_mutex_lock(&_mutex);
@@ -105,7 +105,7 @@ class LOG4CPP_EXPORT AsyncAppender : public Appender {
     return _appender->getFilter();
   }
 
-  size_t size() {
+  size_t size() const {
     pthread_mutex_lock(&_mutex);
     size_t sz = _queue.size();
     pthread_mutex_unlock(&_mutex);
@@ -114,12 +114,14 @@ class LOG4CPP_EXPORT AsyncAppender : public Appender {
 
  private:
   template<typename T> void _delete(T& appender) {
+    // if appender is smart pointer, do not delete appender instance.
   }
   template<typename T> void _delete(T* appender) {
+    // if appender is raw pointer, delete appender instance.
     delete appender;
   }
   APPENDER _appender;
-  pthread_mutex_t _mutex;
+  mutable pthread_mutex_t _mutex;
   pthread_cond_t _cv;
   pthread_cond_t _cv_empty;
   std::queue<LoggingEvent> _queue;
@@ -160,14 +162,14 @@ class LOG4CPP_EXPORT AsyncAppender : public Appender {
           break;
         }
         while (!_queue.empty()) {
-          LoggingEvent event = _queue.front();
-          _queue.pop();
+          LoggingEvent& event = _queue.front();
           pthread_mutex_unlock(&_mutex);
           try {
             _appender->doAppend(event);
           } catch (...) {
           }
           pthread_mutex_lock(&_mutex);
+          _queue.pop();
         }
         pthread_cond_signal(&_cv_empty);
       }
